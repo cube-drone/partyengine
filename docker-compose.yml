@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  redis:
+    image: eqalpha/keydb:latest
+    ports:
+      - "41001:6379"
+  openresty:
+    image: docker.io/nginx
+    ports:
+      - "60000:60000"
+    volumes:
+      - ./openresty-dev.conf:/etc/nginx/conf.d/openresty-dev.conf
+      - ./static:/temp/static
+      - ./frontpage/_site:/temp/site

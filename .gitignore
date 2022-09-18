@@ -1,3 +1,5 @@
+# JS ignores
+node_modules
 
 # Godot-specific ignores
 .import/
