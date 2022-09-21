@@ -166,6 +166,83 @@ async function main(){
         })
     });
 
+    const generateRoomId = (length) => {
+        return uuid().slice(length);
+    }
+
+    const getUniqueRoomId = async () => {
+        let lengths = [4,5,6,7,8,9,10,11,12];
+        for(let length of lengths){
+            let id = generateRoomId(length);
+            let existsAlready = await redisClient.get(`room_${id}_claim`);
+            if(!existsAlready){
+                return id;
+            }
+        }
+        throw new Error("Unique roomspace is completely jammed up, what the hell");
+    }
+
+    const getAndClaimRoomId = async ({counter = 0}={}) => {
+        if(counter > 10){
+            throw new Error("CRITICAL CLAIM ERROR");
+        }
+        let roomId = await getUniqueRoomId();
+        let noncyDrew = uuid();
+        await redisClient.set(`room_${roomId}_claim`, noncyDrew, 'EX', 86400);
+        let roomOwner = await redisClient.get(`room_${roomId}_claim`);
+        if(roomOwner === noncyDrew){
+            return roomId;
+        } 
+        else{
+            console.error("Claim lock failure! Wow, I thought these would be unlikely!");
+            return getAndClaimRoomId({counter: counter + 1});
+        }
+    }
+
+    app.post('/api/room', async(req, res)=>{
+        let roomType = req.body.type;
+        if(!['chat'].includes(roomtype)){
+            throw new Error("that's not a valid room type chump");
+        }
+        
+        let roomId = await getAndClaimRoomId(); 
+
+        await redisClient.set(`room_${roomId}_type`, roomType, 'EX', 86400);
+
+        res.json({
+            roomId,
+            initialState: {},
+        })
+    });
+
+    app.get('/api/room/:roomId', async(req, res)=>{
+        let stream = await redisClient.xrange(`room_${roomId}_stream`, '-', '+');
+        res.status(200).send(stream)
+    });
+
+    app.get('/api/room/:roomId/:lastSeenId', async(req, res)=>{
+        let events = [];
+        res.json(events);
+    });
+
+    let validateEvent = async ({event, roomId}) => {
+        return true;
+    }
+
+    app.post('/api/room/:roomId', async(req, res)=>{
+        await validateEvent({event: req.body, roomId: req.params.roomId});
+
+        let event = req.body;
+        if(!event.id){
+            event.id = uuid();
+        }
+
+        await redisClient.xadd(`room_${roomId}_stream`, '*', 'event', event);
+        
+        res.json({ok: 'ok'});
+    });
+
+
     app.use((req, res, next) => {
         res.status(404).json({
             error: "not found",
