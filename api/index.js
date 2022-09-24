@@ -166,8 +166,23 @@ async function main(){
         })
     });
 
+    // from this point on the identity is required
+    const identityRequired = async (req, res, next) => {
+        
+        if(req.cookies.identityId && uuidIsValid(req.cookies.identityId)){
+            let identityId = req.cookies.identityId;
+            
+            req.identityId = identityId;
+            next();
+        }
+        else{
+            throw new Error("No auth provided; Get an identity");
+        }
+    }
+    app.use(identityRequired);
+
     const generateRoomId = (length) => {
-        return uuid().slice(length);
+        return uuid().replace('-', '').slice(0, length);
     }
 
     const getUniqueRoomId = async () => {
@@ -201,7 +216,8 @@ async function main(){
 
     app.post('/api/room', async(req, res)=>{
         let roomType = req.body.type;
-        if(!['chat'].includes(roomtype)){
+        if(!['chat'].includes(roomType)){
+            console.warn(`invalid roomType: ${roomType}`);
             throw new Error("that's not a valid room type chump");
         }
         
@@ -215,14 +231,31 @@ async function main(){
         })
     });
 
+    let validateTimestamp = (timestamp) => {
+        return true;
+    }
+
+    let validateRoomId = (roomId) => {
+        return true;
+    }
+
     app.get('/api/room/:roomId', async(req, res)=>{
-        let stream = await redisClient.xrange(`room_${roomId}_stream`, '-', '+');
+        await validateRoomId(req.params.roomId);
+        let stream = await redisClient.xrange(`room_${req.params.roomId}_stream`, '-', '+');
         res.status(200).send(stream)
     });
 
-    app.get('/api/room/:roomId/:lastSeenId', async(req, res)=>{
-        let events = [];
-        res.json(events);
+    const incrementTimestamp = (redisTimestamp) => {
+        let [ts, i] = redisTimestamp.split("-");
+        return `${ts}-${parseInt(i)+1}`
+    }
+    
+    app.get('/api/room/:roomId/:timestamp', async(req, res)=>{
+        await validateTimestamp(req.params.timestamp);
+        await validateRoomId(req.params.roomId);
+        let incrementStamp = incrementTimestamp(req.params.timestamp);
+        let stream = await redisClient.xrange(`room_${req.params.roomId}_stream`, incrementStamp, '+');
+        res.status(200).send(stream)
     });
 
     let validateEvent = async ({event, roomId}) => {
@@ -230,20 +263,27 @@ async function main(){
     }
 
     app.post('/api/room/:roomId', async(req, res)=>{
+        await validateRoomId(req.params.roomId);
         await validateEvent({event: req.body, roomId: req.params.roomId});
 
         let event = req.body;
-        if(!event.id){
-            event.id = uuid();
+        let id;
+        if(event.id){
+            id = event.id;
+            delete event.id;
+        }
+        else{
+            id = uuid();
         }
 
-        await redisClient.xadd(`room_${roomId}_stream`, '*', 'event', event);
-        
+        await redisClient.xadd(`room_${req.params.roomId}_stream`, '*', id, JSON.stringify(event));
+        await redisClient.expire(`room_${req.params.roomId}_stream`, 86400); 
         res.json({ok: 'ok'});
     });
 
 
     app.use((req, res, next) => {
+        // fallthrough, default 404
         res.status(404).json({
             error: "not found",
         })
