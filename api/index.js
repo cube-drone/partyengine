@@ -231,11 +231,24 @@ async function main(){
         })
     });
 
+    let refreshRoom = async(roomId) => {
+        let promises = [];
+        promises.push(redisClient.expire(`room_${req.params.roomId}_stream`, 86400)); 
+        promises.push(redisClient.expire(`room_${req.params.roomId}_claim`, 86400)); 
+        promises.push(redisClient.expire(`room_${req.params.roomId}_type`, 86400)); 
+
+        return Promise.all(promises);
+    }
+
     let validateTimestamp = (timestamp) => {
         return true;
     }
 
     let validateRoomId = (roomId) => {
+        return true;
+    }
+
+    let validateEvent = async ({event, roomId}) => {
         return true;
     }
 
@@ -258,10 +271,6 @@ async function main(){
         res.status(200).send(stream)
     });
 
-    let validateEvent = async ({event, roomId}) => {
-        return true;
-    }
-
     app.post('/api/room/:roomId', async(req, res)=>{
         await validateRoomId(req.params.roomId);
         await validateEvent({event: req.body, roomId: req.params.roomId});
@@ -277,7 +286,8 @@ async function main(){
         }
 
         await redisClient.xadd(`room_${req.params.roomId}_stream`, '*', id, JSON.stringify(event));
-        await redisClient.expire(`room_${req.params.roomId}_stream`, 86400); 
+        await refreshRoom();
+
         res.json({ok: 'ok'});
     });
 
