@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://c0j7akbbin0t3"]
+
+[ext_resource type="PackedScene" uid="uid://b2qu253xpuwti" path="res://UI.tscn" id="1_veuk3"]
+
+[node name="Node" type="Node"]
+
+[node name="UI" parent="." instance=ExtResource("1_veuk3")]
+grow_horizontal = 2
+grow_vertical = 2
