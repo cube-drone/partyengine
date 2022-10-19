@@ -10,15 +10,10 @@ config_version=5
 
 [application]
 
-config/name="Squish"
-run/main_scene="res://Main.tscn"
-config/features=PackedStringArray("4.0", "Mobile")
+config/name="Game"
+config/features=PackedStringArray("4.0", "Vulkan Mobile")
 config/icon="res://icon.svg"
-
-[dotnet]
-
-project/assembly_name="Squish"
 
 [rendering]
 
-renderer/rendering_method="mobile"
+vulkan/rendering/back_end=1
